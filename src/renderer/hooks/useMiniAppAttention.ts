@@ -1,9 +1,10 @@
 import { cacheService } from '@data/CacheService'
 import { useSharedCacheValue } from '@data/hooks/useCache'
+import { useEffect, useRef } from 'react'
+
 import { loggerService } from '@logger'
 import { ipcApi, useIpcOn } from '@renderer/ipc'
 import type { CacheMiniAppAttention } from '@shared/data/cache/cacheValueTypes'
-import { useEffect, useRef } from 'react'
 
 const logger = loggerService.withContext('useMiniAppAttention')
 

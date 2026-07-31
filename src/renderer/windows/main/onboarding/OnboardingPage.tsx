@@ -1,3 +1,10 @@
+import { dataApiService } from '@data/DataApiService'
+import { useMultiplePreferences, usePreference } from '@data/hooks/usePreference'
+import { createMemoryHistory, createRootRoute, createRouter, RouterProvider } from '@tanstack/react-router'
+import { ArrowLeft, Check, KeyRound, Languages, LogIn } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+
 import {
   Button,
   Checkbox,
@@ -9,8 +16,6 @@ import {
   SelectValue,
   Tooltip
 } from '@cherrystudio/ui'
-import { dataApiService } from '@data/DataApiService'
-import { useMultiplePreferences, usePreference } from '@data/hooks/usePreference'
 import AppLogo from '@renderer/assets/images/logo.png'
 import { WindowControls } from '@renderer/components/WindowControls'
 import { useDefaultModel, useModels } from '@renderer/hooks/useModel'
@@ -28,10 +33,6 @@ import type { Model } from '@shared/data/types/model'
 import { LATEST_PRIVACY_POLICY_VERSION } from '@shared/utils/constants'
 import { defaultLanguage } from '@shared/utils/languages'
 import { isNonChatModel } from '@shared/utils/model'
-import { createMemoryHistory, createRootRoute, createRouter, RouterProvider } from '@tanstack/react-router'
-import { ArrowLeft, Check, KeyRound, Languages, LogIn } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useTranslation } from 'react-i18next'
 
 import { PrivacyPolicyDialog } from '../privacy/PrivacyPolicyDialog'
 
