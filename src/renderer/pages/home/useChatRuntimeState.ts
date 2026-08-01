@@ -2,7 +2,7 @@ import { useInvalidateCache } from '@data/hooks/useDataApi'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { loggerService } from '@logger'
-// eslint-disable-next-line barrel/closed -- Bypass the flow barrel so chat startup does not touch TopicMessageFlowCanvas.
+// oxlint-disable-next-line cherry/barrel-closed -- Bypass the flow barrel so chat startup does not touch TopicMessageFlowCanvas.
 import {
   buildTopicMessageFlowLiveState,
   type TopicMessageFlowLiveState

@@ -1105,7 +1105,7 @@ const ChatComposerInner = ({
       modelMultiSelectMode: mentionedModelDraftRef.current.modelMultiSelectMode
     })
   })
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- `useEffectEvent` reads the latest draft; cleanup is keyed only by topic.
+  // oxlint-disable-next-line react/exhaustive-deps -- `useEffectEvent` reads the latest draft; cleanup is keyed only by topic.
   useEffect(() => () => persistFinalDraft(), [draftCacheScopeKey])
 
   const restoreSavedDraft = useCallback(() => {
@@ -1177,7 +1177,7 @@ const ChatComposerInner = ({
     }
 
     restoreEditableMessageDraft(editingMessageForCurrentTopic)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `useEffectEvent` reads latest selectable knowledge bases; this effect is keyed by editingSessionId.
+    // oxlint-disable-next-line react/exhaustive-deps -- `useEffectEvent` reads latest selectable knowledge bases; this effect is keyed by editingSessionId.
   }, [
     actionsRef,
     editingMessageForCurrentTopic,
