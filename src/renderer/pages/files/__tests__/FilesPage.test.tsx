@@ -895,7 +895,7 @@ describe('FilesPage file operations', () => {
   })
 
   it('selects all visible files from the header checkbox and exposes batch delete', async () => {
-    const secondEntry = { ...entry, id: 'file-2', name: 'notes' } as unknown as FileEntry
+    const secondEntry = { ...entry, id: 'file-2', name: 'notes' }
     renderFilesPage([entry, secondEntry])
 
     fireEvent.click(screen.getByRole('checkbox', { name: 'files.select_all' }))
@@ -907,8 +907,8 @@ describe('FilesPage file operations', () => {
   })
 
   it('selects the visible range when Shift-clicking a file checkbox', async () => {
-    const secondEntry = { ...entry, id: 'file-2', name: 'notes' } as unknown as FileEntry
-    const thirdEntry = { ...entry, id: 'file-3', name: 'summary' } as unknown as FileEntry
+    const secondEntry = { ...entry, id: 'file-2', name: 'notes' }
+    const thirdEntry = { ...entry, id: 'file-3', name: 'summary' }
     renderFilesPage([entry, secondEntry, thirdEntry])
     const user = userEvent.setup()
     const checkboxes = screen.getAllByRole('checkbox', { name: 'files.select_file' })
@@ -924,8 +924,8 @@ describe('FilesPage file operations', () => {
   })
 
   it('starts a new selection anchor after clearing the previous selection', async () => {
-    const secondEntry = { ...entry, id: 'file-2', name: 'notes' } as unknown as FileEntry
-    const thirdEntry = { ...entry, id: 'file-3', name: 'summary' } as unknown as FileEntry
+    const secondEntry = { ...entry, id: 'file-2', name: 'notes' }
+    const thirdEntry = { ...entry, id: 'file-3', name: 'summary' }
     renderFilesPage([entry, secondEntry, thirdEntry])
     const user = userEvent.setup()
     const checkboxes = screen.getAllByRole('checkbox', { name: 'files.select_file' })
@@ -942,7 +942,7 @@ describe('FilesPage file operations', () => {
   })
 
   it('does not change selection when opening a row context menu', () => {
-    const secondEntry = { ...entry, id: 'file-2', name: 'notes' } as unknown as FileEntry
+    const secondEntry = { ...entry, id: 'file-2', name: 'notes' }
     renderFilesPage([entry, secondEntry])
 
     const checkboxes = screen.getAllByRole('checkbox', { name: 'files.select_file' })
