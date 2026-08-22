@@ -18341,7 +18341,7 @@
       "ownedBy": "stepfun"
     },
     {
-      "capabilities": ["function-call", "reasoning", "image-recognition", "structured-output"],
+      "capabilities": ["function-call", "reasoning", "image-recognition"],
       "contextWindow": 256000,
       "family": "kat-coder",
       "id": "kat-coder-air-v2-5",
@@ -21747,5 +21747,5 @@
       "ownedBy": "zhipu"
     }
   ],
-  "version": "545ef0604e276213"
+  "version": "e01f2d48bf160d6b"
 }

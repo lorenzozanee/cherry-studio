@@ -448,8 +448,8 @@
     }
   ],
   "providers": {
-    "version": "4a6f7225220e7a46",
-    "count": 61,
+    "version": "35be3e680f7d6b89",
+    "count": 62,
     "entries": [
       {
         "id": "cherryin",
@@ -590,6 +590,10 @@
       {
         "id": "dashscope",
         "name": "Bailian"
+      },
+      {
+        "id": "qwencloud",
+        "name": "QwenCloud"
       },
       {
         "id": "stepfun",
