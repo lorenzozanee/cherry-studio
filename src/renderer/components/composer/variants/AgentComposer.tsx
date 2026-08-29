@@ -26,6 +26,11 @@ import type { ToolContext } from '@renderer/components/composer/tools/types'
 import NewConversationIcon from '@renderer/components/icons/NewConversationIcon'
 import { McpLogo } from '@renderer/components/icons/SvgIcon'
 import {
+  ModelSpeedControl,
+  resolveSupportedReasoningEffort,
+  resolveSupportedServiceTier
+} from '@renderer/components/ModelSpeedControl'
+import {
   type QuickPanelInputAdapter,
   type QuickPanelListItem,
   useOptionalQuickPanel
@@ -116,11 +121,6 @@ import {
 import { emptyActions, type ProviderActionHandlers } from './shared/composerProviderActions'
 import { buildComposerQueuedPayload, getComposerHistoryText } from './shared/composerQueuedPayload'
 import { useComposerQuoteInsertion } from './shared/composerQuote'
-import {
-  ComposerSpeedControl,
-  resolveComposerReasoningEffort,
-  resolveComposerServiceTier
-} from './shared/ComposerSpeedControl'
 import { type ComposerToolbarCustomTool, ComposerToolbarShortcuts } from './shared/ComposerToolbarShortcuts'
 import { useComposerFileCapabilities } from './shared/useComposerFileCapabilities'
 import { useComposerKnowledgeBaseScope } from './shared/useComposerKnowledgeBaseScope'
@@ -1407,8 +1407,8 @@ const AgentComposerInner = ({
         files,
         fileTokenId: agentComposerTokenId.file,
         extra: () => ({
-          reasoningEffort: model ? resolveComposerReasoningEffort(model, reasoningEffort) : reasoningEffort,
-          serviceTier: model ? resolveComposerServiceTier(model, serviceTier) : serviceTier,
+          reasoningEffort: model ? resolveSupportedReasoningEffort(model, reasoningEffort) : reasoningEffort,
+          serviceTier: model ? resolveSupportedServiceTier(model, serviceTier) : serviceTier,
           ...(fastMode && model?.supportsFastMode === true ? { fastMode: true } : {})
         })
       })
@@ -1697,7 +1697,7 @@ const AgentComposerInner = ({
   const sendAccessory: ComposerSurfaceProps['sendAccessory'] = (
     <>
       {model ? (
-        <ComposerSpeedControl
+        <ModelSpeedControl
           model={model}
           reasoningEffort={reasoningEffort}
           serviceTier={serviceTier}
