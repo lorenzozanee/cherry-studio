@@ -1,11 +1,12 @@
 import { dataApiService } from '@data/DataApiService'
 import { useCache } from '@data/hooks/useCache'
-import { useInvalidateCache, useMutation, useQuery } from '@data/hooks/useDataApi'
+import { useDataChange, useInvalidateCache, useMutation, useQuery } from '@data/hooks/useDataApi'
 import { usePreference } from '@data/hooks/usePreference'
 import { useReorder } from '@data/hooks/useReorder'
 import { loggerService } from '@logger'
 import { computeMinimalMoves } from '@renderer/data/utils/reorder'
 import { useOptionalTabsContext } from '@renderer/hooks/tab'
+import { useAppEdition } from '@renderer/hooks/useAppEdition'
 import { useSidebarFavorites } from '@renderer/hooks/useSidebarFavorites'
 import i18n from '@renderer/i18n/resolver'
 import { ipcApi } from '@renderer/ipc'
@@ -13,7 +14,9 @@ import { clearWebviewState, setWebviewLoaded } from '@renderer/utils/webviewStat
 import { DataApiErrorFactory, isDataApiError, toDataApiError } from '@shared/data/api/errors'
 import type { CreateMiniAppDto, UpdateMiniAppDto } from '@shared/data/api/schemas/miniApps'
 import type { MiniApp, MiniAppRegion, MiniAppStatus } from '@shared/data/types/miniApp'
+import { resolveLocalizedText } from '@shared/types/miniAppManifest'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 
 /**
  * Data Flow Design:
@@ -43,6 +46,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react'
  *      own app under Global.
  */
 const isVisibleForRegion = (app: MiniApp, region: MiniAppRegion): boolean => {
+  if (app.kind === 'app') return true
   if (region === 'CN') return true
 
   if (!app.supportedRegions || app.supportedRegions.length === 0) {
@@ -149,8 +153,19 @@ async function settleAndInvalidate(
 
 export const useMiniApps = (options: { enabled?: boolean } = {}) => {
   const queryEnabled = options.enabled ?? true
+  const appEdition = useAppEdition()
   const { data, isLoading, error, mutate: refetch } = useQuery('/mini-apps', { enabled: queryEnabled })
-  const rawApps: MiniApp[] = useMemo(() => data ?? [], [data])
+  const { i18n: i18nInstance } = useTranslation()
+  const language = i18nInstance.language
+  // Main resolved `name` for the language at query time and the query is cached; a
+  // language switch would otherwise leave every installed app under its old name.
+  const rawApps: MiniApp[] = useMemo(
+    () =>
+      (data ?? []).map((app) =>
+        app.kind === 'app' ? { ...app, name: resolveLocalizedText(app.nameI18n, language) } : app
+      ),
+    [data, language]
+  )
 
   // Partition by status in single pass (js-combine-iterations)
   const { allApps, enabled, disabled, pinned } = useMemo(() => {
@@ -172,15 +187,17 @@ export const useMiniApps = (options: { enabled?: boolean } = {}) => {
   const [detectedRegion, setDetectedRegion] = useCache('mini_app.detected_region')
 
   const effectiveRegion: MiniAppRegion =
-    miniAppRegionSetting === 'auto'
-      ? (detectedRegion ?? 'CN')
-      : miniAppRegionSetting === 'CN' || miniAppRegionSetting === 'Global'
-        ? miniAppRegionSetting
-        : 'CN'
+    appEdition === 'cn'
+      ? 'CN'
+      : miniAppRegionSetting === 'auto'
+        ? (detectedRegion ?? 'CN')
+        : miniAppRegionSetting === 'CN' || miniAppRegionSetting === 'Global'
+          ? miniAppRegionSetting
+          : 'CN'
 
   // Auto-detect region once per session
   useEffect(() => {
-    if (!queryEnabled || miniAppRegionSetting !== 'auto' || detectedRegion) return
+    if (appEdition === 'cn' || !queryEnabled || miniAppRegionSetting !== 'auto' || detectedRegion) return
     let cancelled = false
     detectUserRegion()
       .then((region) => {
@@ -198,7 +215,7 @@ export const useMiniApps = (options: { enabled?: boolean } = {}) => {
     return () => {
       cancelled = true
     }
-  }, [detectedRegion, miniAppRegionSetting, queryEnabled, setDetectedRegion])
+  }, [appEdition, detectedRegion, miniAppRegionSetting, queryEnabled, setDetectedRegion])
 
   // === Region-filtered views ===
   // Include pinned apps so they remain visible in the grid when pinned to launchpad/sidebar
@@ -507,6 +524,7 @@ export const useMiniApps = (options: { enabled?: boolean } = {}) => {
   )
 
   return {
+    appEdition,
     allApps,
     miniApps,
     disabled: disabledApps,
@@ -538,3 +556,16 @@ export const useMiniApps = (options: { enabled?: boolean } = {}) => {
 }
 
 export type UseMiniAppsReturn = ReturnType<typeof useMiniApps>
+
+/**
+ * Converges `/mini-apps` after the writes DataApi cannot see: install, uninstall,
+ * update apply and rollback commit through IpcApi, so no mutation invalidates the
+ * query cache. Main publishes `notifyDataApiDataChange` after each commit; this is
+ * the renderer half. Mounted ONCE per window by `useWindowRuntime`.
+ */
+export function useMiniAppListSync(): void {
+  const invalidate = useInvalidateCache()
+  useDataChange('/mini-apps', () => {
+    void invalidate('/mini-apps')
+  })
+}

@@ -1,20 +1,18 @@
 import { Alert, Button, Spinner } from '@cherrystudio/ui'
 import { usePersistCache } from '@data/hooks/useCache'
+import { useAppEdition } from '@renderer/hooks/useAppEdition'
 import { useProviders } from '@renderer/hooks/useProvider'
+import { isProviderAvailableInEdition, isProviderSettingsListVisibleProvider } from '@renderer/utils/providerSettings'
 import type { Provider } from '@shared/data/types/provider'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { omit } from 'es-toolkit/compat'
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import type { ProviderApiSetupInitialStep } from './ConnectionSettings/ProviderApiSetupDialog'
 import { useProviderDeepLinkImport } from './hooks/useProviderDeepLinkImport'
 import { ProviderList } from './ProviderList'
 import ProviderSetting from './ProviderSetting'
-import { isProviderSettingsListVisibleProvider } from './utils/providerDisplay'
-
-interface ProviderSettingsPageProps {
-  isOnboarding?: boolean
-}
 
 interface ProviderSettingsSearch {
   addProviderData?: string
@@ -22,11 +20,17 @@ interface ProviderSettingsSearch {
   id?: string
 }
 
-interface ProviderSettingsContentProps extends ProviderSettingsPageProps {
+interface PendingApiSetup {
+  providerId: string
+  initialStep: ProviderApiSetupInitialStep
+}
+
+interface ProviderSettingsContentProps {
   rawProviders: Provider[]
 }
 
-function ProviderSettingsContent({ isOnboarding = false, rawProviders }: ProviderSettingsContentProps) {
+function ProviderSettingsContent({ rawProviders }: ProviderSettingsContentProps) {
+  const appEdition = useAppEdition()
   const search = useSearch({ strict: false }) as ProviderSettingsSearch
   const navigate = useNavigate()
   const [lastSelectedProviderId, setLastSelectedProviderId] = usePersistCache(
@@ -35,10 +39,18 @@ function ProviderSettingsContent({ isOnboarding = false, rawProviders }: Provide
   const [selectedProviderId, setSelectedProviderIdState] = useState<string | undefined>(
     () => lastSelectedProviderId ?? undefined
   )
+  const [pendingApiSetup, setPendingApiSetup] = useState<PendingApiSetup | null>(null)
   const setLastSelectedProviderIdRef = useRef(setLastSelectedProviderId)
 
   const providers = useMemo(() => (Array.isArray(rawProviders) ? rawProviders : []), [rawProviders])
-  const visibleProviders = useMemo(() => providers.filter(isProviderSettingsListVisibleProvider), [providers])
+  const visibleProviders = useMemo(
+    () =>
+      providers.filter(
+        (provider) =>
+          isProviderSettingsListVisibleProvider(provider) && isProviderAvailableInEdition(provider, appEdition)
+      ),
+    [appEdition, providers]
+  )
   const filterModeHint = search.filter === 'agent' ? 'agent' : undefined
 
   useEffect(() => {
@@ -53,8 +65,17 @@ function ProviderSettingsContent({ isOnboarding = false, rawProviders }: Provide
   }, [lastSelectedProviderId])
 
   const setSelectedProviderId = useCallback((providerId: string | undefined) => {
+    setPendingApiSetup((current) => (current?.providerId === providerId ? current : null))
     setLastSelectedProviderIdRef.current(providerId ?? null)
     startTransition(() => setSelectedProviderIdState(providerId))
+  }, [])
+
+  const handleCustomProviderCreated = useCallback((providerId: string, hasApiKey: boolean) => {
+    setPendingApiSetup({ providerId, initialStep: hasApiKey ? 'models' : 'api-key' })
+  }, [])
+
+  const handleApiSetupClosed = useCallback((providerId: string) => {
+    setPendingApiSetup((current) => (current?.providerId === providerId ? null : current))
   }, [])
 
   useProviderDeepLinkImport(search.addProviderData, setSelectedProviderId)
@@ -100,15 +121,23 @@ function ProviderSettingsContent({ isOnboarding = false, rawProviders }: Provide
         selectedProviderId={selectedProviderId}
         filterModeHint={filterModeHint}
         onSelectProvider={setSelectedProviderId}
+        onCustomProviderCreated={handleCustomProviderCreated}
       />
       {selectedProvider && (
-        <ProviderSetting providerId={selectedProvider.id} key={selectedProvider.id} isOnboarding={isOnboarding} />
+        <ProviderSetting
+          providerId={selectedProvider.id}
+          key={selectedProvider.id}
+          initialApiSetupStep={
+            pendingApiSetup?.providerId === selectedProvider.id ? pendingApiSetup.initialStep : undefined
+          }
+          onApiSetupClosed={() => handleApiSetupClosed(selectedProvider.id)}
+        />
       )}
     </div>
   )
 }
 
-export default function ProviderSettingsPage({ isOnboarding = false }: ProviderSettingsPageProps) {
+export default function ProviderSettingsPage() {
   const { t } = useTranslation()
   const { providers, hasLoaded, isLoading, error, refetch } = useProviders()
 
@@ -139,5 +168,5 @@ export default function ProviderSettingsPage({ isOnboarding = false }: ProviderS
     )
   }
 
-  return <ProviderSettingsContent isOnboarding={isOnboarding} rawProviders={providers} />
+  return <ProviderSettingsContent rawProviders={providers} />
 }

@@ -8,6 +8,7 @@ sources:
   - .github/workflows/post-release.yml
   - .github/workflows/ci.yml
   - .agents/skills/prepare-release/SKILL.md
+  - electron-builder.cn.config.cjs
 ---
 
 # Release Workflow Operations
@@ -39,7 +40,7 @@ Use **Preview Release** when a maintainer needs installable packages from an unr
 4. Select `all`, `windows`, `mac`, or `linux`, then run the workflow.
 5. Open the resulting draft under **Releases** and download its installers.
 
-Every selected platform builds the same resolved source commit. The package version is changed only inside the runner to `<base-version>-preview.g<commit>`. After every selected platform succeeds, the workflow creates or updates `preview-<branch>-<commit>` as a draft prerelease and uploads the installers there.
+Every selected platform builds both the global and China editions from the same resolved source commit. The package version is changed only inside the runner to `<base-version>-preview.g<commit>`. After both editions succeed on every selected platform, the workflow creates or updates `preview-<branch>-<commit>` as a draft prerelease and uploads all installers there.
 
 Preview source code runs without repository credentials, application service secrets, signing certificates, or notarization credentials, so these internal packages are unsigned and may omit secret-backed integrations. Their non-semantic-version tags do not match `v<version>` or have a corresponding `release/v<version>` branch, so they are excluded from formal release preparation, hotfix backports, and Post Release. They do not acquire the `release-state` lock and cannot be published by the formal **Release** workflow.
 
@@ -64,7 +65,7 @@ Do not create the release branch, release tag, or metadata synchronization pull 
    - An exact version such as `2.1.0`, `2.1.0-rc.1`, or `2.1.0-beta.1`.
 4. Run the workflow and wait for it to finish.
 
-The workflow freezes the selected `main` commit as the release source and verifies that it records the latest published version. If that published baseline is `v<baseline-version>`, its release-note collection base is that tag when it is an ancestor; otherwise it requires the latest commit whose full message contains the exact line `release-metadata-boundary: v<baseline-version>`. This marker always names the last published version already represented on `main`, not the requested target version. Only metadata sync commits created before that marker existed may use the legacy exact subject `chore(release): sync v<baseline-version> metadata`, optionally followed by GitHub's ` (#<number>)` squash suffix. The requested version must be strictly greater than that baseline. It then collects release notes, updates the release metadata source files, validates that only the intended version, notes, and stable history entry changed, and regenerates the product manifest itself without a write token. A fresh job accepts only the four staged metadata files and creates `release/v<version>` from the frozen source commit through the GitHub API. A later `main` change does not alter or invalidate that release source. Neither the target branch nor a GitHub Release for the target tag may already exist, and the commit must be both Verified and DCO-signed off.
+The workflow freezes the selected `main` commit as the release source and verifies that it records the latest published version. If that published baseline is `v<baseline-version>`, its release-note collection base is that tag when it is an ancestor; otherwise it requires the latest commit whose full message contains the exact line `release-metadata-boundary: v<baseline-version>`. This marker always names the last published version already represented on `main`, not the requested target version. Only metadata sync commits created before that marker existed may use the legacy exact subject `chore(release): sync v<baseline-version> metadata`, optionally followed by GitHub's ` (#<number>)` squash suffix. The requested version must be strictly greater than that baseline. It then collects release notes, extracts only the three source metadata changes from the temporary preparation workspace, restores the frozen source SHA, validates the intended version, bilingual sections, and stable history, and regenerates the product manifest itself without a write token. A fresh job copies only those metadata files from the workflow artifact and creates `release/v<version>` from the frozen source commit through the GitHub API. A later `main` change does not alter or invalidate that release source. Neither the target branch nor a GitHub Release for the target tag may already exist, and the commit must be both Verified and DCO-signed off.
 
 Release preparation may change only these files:
 
@@ -122,13 +123,13 @@ Before building, the workflow verifies that:
 - CI succeeded for the exact branch commit.
 - A matching published release does not already exist.
 
-Each selected runner first stages only its own platform artifacts. After every selected build succeeds, one final job downloads that complete staged set, fails on any artifact read or upload error, updates the draft, and only then moves `v<version>` to the exact validated branch commit. A single-platform retry first downloads the existing draft assets, overlays the selected platform's replacements, uploads the complete set, and never moves the tag. Tag movement is allowed only while the release is still a draft.
+Each selected platform builds both the existing global edition and the China edition from the same commit. Their release asset names, package IDs, and update channels identify the edition, while their installed product name, executable, shortcut, protocol, and `userData` location stay the same. Both Windows installers also retain the existing global NSIS GUID, so installing either edition replaces the same installation instead of creating a second app. Each runner validates and stages only its own edition and platform artifacts. After every selected build succeeds, one final job downloads that complete staged set, fails on any artifact read or upload error, updates the draft, and only then moves `v<version>` to the exact validated branch commit. A single-platform retry rebuilds both editions for that platform, downloads the existing draft assets, overlays the replacements, uploads the complete set, and never moves the tag. Tag movement is allowed only while the release is still a draft.
 
 Before publishing, inspect the draft release and confirm:
 
 - The tag and release branch point to the same commit.
 - All expected platform jobs succeeded.
-- Installers, archives, update manifests, blockmaps, and release notes are present.
+- Global and China edition installers, archives, update manifests, blockmaps, and release notes are present.
 - The version and release notes match the intended release.
 
 Keep the release as a draft while testing or while hotfixes are still expected.
@@ -203,13 +204,13 @@ Publish only after the latest release branch commit has passed CI and an `all`-p
 3. Select the matching `release/v<version>` branch and the `publish` operation.
 4. Run the workflow.
 
-The workflow shares the same release-state lock as preparation, builds, backport creation, and Post Release. Immediately before publishing, it requires the draft, tag, branch, and selected SHA to agree; rejects open release-branch PRs and every merged `hotfix` after the release branch point that lacks `backported/v<version>`; requires a successful exact-head `all` build; and confirms that artifacts exist. This explicit hotfix gate also blocks publication when a backport job is merely queued and has not opened its PR yet. The final fetched `main` SHA is the hotfix cutoff for the release; a hotfix merged after that snapshot belongs to the next release. Publication then makes the tag immutable for this workflow. **Release** refuses to update an already published release; any later fix requires a new version.
+The workflow shares the same release-state lock as preparation, builds, backport creation, and Post Release. Immediately before publishing, it takes one final state snapshot and requires the draft, tag, branch, and selected SHA to agree; rejects open release-branch PRs and every merged `hotfix` after the release branch point that lacks `backported/v<version>`; requires a successful exact-head `all` build; and confirms that artifacts exist. This explicit hotfix gate also blocks publication when a backport job is merely queued and has not opened its PR yet. The fetched `main` SHA in that snapshot is the hotfix cutoff for the release; a hotfix merged after it belongs to the next release. Publication then makes the tag immutable for this workflow. **Release** refuses to update an already published release; any later fix requires a new version.
 
 Publishing triggers **Post Release** automatically.
 
 ## 6. Merge the Release Metadata Pull Request
 
-**Post Release** verifies that the published tag and `release/v<version>` still point to the same commit. It computes the metadata-only delta from the release branch point to the published tag, applies that delta with a three-way merge on the `main` snapshot checked out by the workflow, and opens `release-sync/v<version>`. If `main` advances while the workflow is running, the pull request still contains only the metadata commit; its normal merge checks reconcile the newer base. Non-overlapping edits made on `main` are preserved, while an overlapping edit produces a pull request conflict instead of being overwritten.
+**Post Release** uses the published tag as the canonical metadata source. It computes the metadata-only delta from the release branch point to that tag, applies the delta with a three-way merge on the `main` snapshot checked out by the workflow, and opens `release-sync/v<version>`. The release branch may move or be removed after publication without preventing this synchronization. If `main` advances while the workflow is running, the pull request still contains only the metadata commit; its normal merge checks reconcile the newer base. Non-overlapping edits made on `main` are preserved, while an overlapping edit produces a pull request conflict instead of being overwritten.
 
 The pull request may contain only:
 
@@ -242,7 +243,6 @@ If the metadata files already match `main`, **Post Release** exits without openi
 | Multiple active release branches | Backport target is ambiguous | Resolve the extra draft release state, then rerun the backport workflow |
 | `backport-failed/v<version>` | Automatic preparation failed or the backport PR closed unmerged | Inspect the linked workflow run or follow the manual procedure above |
 | Backport pull request closed without merging | The hotfix has not reached the release branch | Reopen the pull request or complete a manual backport |
-| Published tag and release branch differ | Release state changed after the build | Stop and reconcile the refs before retrying **Post Release** |
 | Published metadata conflicts with `main` | The same metadata lines changed after the release branch was cut | Reconcile those edits on `main`, then rerun **Post Release**; never replace the whole file from the tag |
 | Commit is not Verified or lacks DCO | Token identity or signing failed | Fix the workflow/token configuration; never bypass the check |
 

@@ -1,4 +1,5 @@
 import { dataApiService } from '@data/DataApiService'
+import i18n from '@renderer/i18n/resolver'
 import { clearWebviewState, setWebviewLoaded } from '@renderer/utils/webviewStateManager'
 import type { MiniApp } from '@shared/data/types/miniApp'
 import { MockDataApiUtils } from '@test-mocks/renderer/DataApiService'
@@ -17,6 +18,11 @@ const mockTabs = vi.hoisted(() => ({
 
 const mocks = vi.hoisted(() => ({ request: vi.fn() }))
 vi.mock('@renderer/ipc', () => ({ ipcApi: { request: mocks.request } }))
+
+const appEditionMocks = vi.hoisted(() => ({ edition: 'global' as 'global' | 'cn' }))
+vi.mock('@renderer/hooks/useAppEdition', () => ({
+  useAppEdition: () => appEditionMocks.edition
+}))
 
 vi.mock('@renderer/hooks/tab', () => ({
   useOptionalTabsContext: () =>
@@ -61,6 +67,7 @@ describe('useMiniApps', () => {
 
     mocks.request.mockReset()
     mockIpCountry('CN')
+    appEditionMocks.edition = 'global'
 
     // Reset module-level regionDetectionPromise to ensure fresh detection in each test
     __resetRegionDetectionForTesting()
@@ -70,6 +77,37 @@ describe('useMiniApps', () => {
     mockTabs.updateTab.mockClear()
     mockClearWebviewState.mockClear()
     mockSetWebviewLoaded.mockClear()
+  })
+
+  describe('display name', () => {
+    it('re-resolves a local app name when the UI language changes', async () => {
+      // Main resolves `name` for the language at query time and the query is cached, so
+      // a language switch left every installed app under its old name until some
+      // unrelated write refreshed the list.
+      const app = {
+        kind: 'app',
+        appId: 'com.example.a',
+        name: 'Alpha',
+        nameI18n: { en: 'Alpha', zh: '阿尔法' },
+        url: 'cherry-miniapp://com.example.a/index.html',
+        presetMiniAppId: null,
+        status: 'enabled',
+        orderKey: 'a0',
+        version: '1.0.0',
+        aiModelId: null,
+        aiQuickModelId: null
+      } as MiniApp
+      MockUseDataApiUtils.mockQueryData('/mini-apps', paginated([app]))
+      const { result } = renderHook(() => useMiniApps())
+      try {
+        await act(() => i18n.changeLanguage('zh-CN'))
+        expect(result.current.allApps[0].name).toBe('阿尔法')
+        await act(() => i18n.changeLanguage('en-US'))
+        expect(result.current.allApps[0].name).toBe('Alpha')
+      } finally {
+        await act(() => i18n.changeLanguage('en-US'))
+      }
+    })
   })
 
   // === Data Loading ===
@@ -124,6 +162,29 @@ describe('useMiniApps', () => {
   // === Region Filtering ===
 
   describe('region filtering', () => {
+    it('forces the CN catalog in the CN edition without overwriting the shared preference', () => {
+      appEditionMocks.edition = 'cn'
+      MockUsePreferenceUtils.setPreferenceValue('feature.mini_app.region', 'Global')
+      const apps = [createGlobalApp('g', { status: 'enabled' }), createCnOnlyApp('c', { status: 'enabled' })]
+      MockUseDataApiUtils.mockQueryData('/mini-apps', paginated(apps))
+
+      const { result } = renderHook(() => useMiniApps())
+
+      expect(result.current.miniApps.map((app) => app.appId)).toEqual(['g', 'c'])
+      expect(result.current.appEdition).toBe('cn')
+      expect(MockUsePreferenceUtils.getPreferenceValue('feature.mini_app.region')).toBe('Global')
+    })
+
+    it('does not detect the IP region in the CN edition', () => {
+      appEditionMocks.edition = 'cn'
+      MockUsePreferenceUtils.setPreferenceValue('feature.mini_app.region', 'auto')
+      MockUseCacheUtils.setCacheValue('mini_app.detected_region', null)
+
+      renderHook(() => useMiniApps())
+
+      expect(mocks.request).not.toHaveBeenCalledWith('system.get_ip_country')
+    })
+
     it('should show all apps when region is CN (default)', () => {
       const { mixedRegion } = appFixtures
       const apps = Object.values(mixedRegion).map((a) => ({ ...a, status: 'enabled' as const }))
@@ -285,7 +346,7 @@ describe('useMiniApps', () => {
         })
       })
 
-      // Logo edits go through the `mini_app.set_logo` command, not this PATCH;
+      // Logo edits go through the `mini_app.settings.set_logo` command, not this PATCH;
       // the tab icon still resolves from the service's returned `logo`.
       expect(trigger).toHaveBeenCalledWith({
         params: { appId: 'custom-app' },

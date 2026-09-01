@@ -223,11 +223,16 @@ export function useHomeMessageListProviderValue({
 
     await dataApiService.patch(`/messages/${parsed.messageId}`, { body: { data: { parts: updatedParts } } })
   }, [])
+  const diagnosticReport = useMemo(
+    () => (normalInteractionsEnabled ? { location: t('error.diagnostic_report.locations.home') } : undefined),
+    [normalInteractionsEnabled, t]
+  )
 
   const {
     errorActions,
     exportActions,
     getMessageActivityState,
+    messageActivityStore,
     headerCapabilities,
     leafCapabilities,
     menuConfig,
@@ -242,6 +247,7 @@ export function useHomeMessageListProviderValue({
     partsByMessageId,
     streamingLayers,
     deleteMessage: normalInteractionsEnabled ? deleteMessage : undefined,
+    diagnosticReport,
     persistDiagnosis
   })
 
@@ -786,10 +792,11 @@ export function useHomeMessageListProviderValue({
       menuConfig,
       selection: selectionController.selection,
       editingMessageId,
-      translationLanguages: translationLanguages ?? [],
+      translationLanguages,
       translationLanguagesStatus,
       getMessageUiState: messageUiStateCache.getMessageUiState,
       getMessageSiblings,
+      messageActivityStore,
       getMessageActivityState,
       isMessageTranslating,
       ...pickMessageLeafState(leafCapabilities),
@@ -808,6 +815,7 @@ export function useHomeMessageListProviderValue({
       menuConfig,
       messageUiStateCache.getMessageUiState,
       messageItems,
+      messageActivityStore,
       messageNavigation,
       partsByMessageId,
       renderConfig,

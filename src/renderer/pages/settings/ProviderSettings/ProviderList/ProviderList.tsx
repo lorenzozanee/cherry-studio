@@ -1,15 +1,16 @@
 import { usePersistCache } from '@data/hooks/useCache'
 import { useReorder } from '@data/hooks/useReorder'
 import ConfirmActionPopup from '@renderer/components/popups/ConfirmActionPopup'
+import { useAppEdition } from '@renderer/hooks/useAppEdition'
 import { useModels } from '@renderer/hooks/useModel'
 import { useProviders } from '@renderer/hooks/useProvider'
 import { providerListClasses } from '@renderer/pages/settings/ProviderSettings/primitives/ProviderSettingsPrimitives'
 import {
   isProviderPresetInstanceSource,
-  isProviderSettingsListVisibleProvider,
   matchKeywordsInProvider
 } from '@renderer/pages/settings/ProviderSettings/utils/providerDisplay'
 import { toast } from '@renderer/services/toast'
+import { isProviderAvailableInEdition, isProviderSettingsListVisibleProvider } from '@renderer/utils/providerSettings'
 import type { Provider } from '@shared/data/types/provider'
 import { canManageProvider } from '@shared/utils/provider'
 import { Plus } from 'lucide-react'
@@ -25,17 +26,24 @@ import ProviderListHeaderFilterMenu from './ProviderListHeaderFilterMenu'
 import ProviderListItemWithContextMenu from './ProviderListItemWithContextMenu'
 import ProviderListSearchField from './ProviderListSearchField'
 import { useProviderDelete } from './useProviderDelete'
-import { type SubmitProviderEditorParams, useProviderEditor } from './useProviderEditor'
+import { type ProviderCreationContext, type SubmitProviderEditorParams, useProviderEditor } from './useProviderEditor'
 
 export interface ProviderListProps {
   selectedProviderId?: string
   filterModeHint?: ProviderFilterMode
   onSelectProvider: (providerId: string) => void
+  onCustomProviderCreated?: (providerId: string, hasApiKey: boolean) => void
 }
 
-export default function ProviderList({ selectedProviderId, filterModeHint, onSelectProvider }: ProviderListProps) {
+export default function ProviderList({
+  selectedProviderId,
+  filterModeHint,
+  onSelectProvider,
+  onCustomProviderCreated
+}: ProviderListProps) {
   const { t } = useTranslation()
   const { providers } = useProviders()
+  const appEdition = useAppEdition()
   const { applyReorderedList } = useReorder('/providers', { revalidateOnSuccess: false })
   const { isSupported: isOvmsSupported } = useOvmsSupport()
 
@@ -52,6 +60,16 @@ export default function ProviderList({ selectedProviderId, filterModeHint, onSel
     setExpandedGroups((prev) => ({ ...prev, [presetProviderId]: !prev[presetProviderId] }))
   }, [])
 
+  const handleProviderCreated = useCallback(
+    (providerId: string, context: ProviderCreationContext) => {
+      onSelectProvider(providerId)
+      if (context.kind === 'custom') {
+        onCustomProviderCreated?.(providerId, context.hasApiKey)
+      }
+    },
+    [onCustomProviderCreated, onSelectProvider]
+  )
+
   const {
     isOpen: editorOpen,
     mode: editorMode,
@@ -61,7 +79,7 @@ export default function ProviderList({ selectedProviderId, filterModeHint, onSel
     startEdit,
     cancel: cancelEditor,
     submit: submitEditor
-  } = useProviderEditor({ onProviderCreated: onSelectProvider })
+  } = useProviderEditor({ onProviderCreated: handleProviderCreated })
 
   const { deleteProvider } = useProviderDelete()
 
@@ -112,8 +130,12 @@ export default function ProviderList({ selectedProviderId, filterModeHint, onSel
   }, [allModels, searchText])
 
   const filteredProviders = useMemo(() => {
+    const keywords = searchText.toLowerCase().split(/\s+/).filter(Boolean)
     return providers.filter((provider) => {
       if (!isProviderSettingsListVisibleProvider(provider)) {
+        return false
+      }
+      if (!isProviderAvailableInEdition(provider, appEdition)) {
         return false
       }
       if (provider.id === 'ovms' && !isOvmsSupported) {
@@ -125,10 +147,9 @@ export default function ProviderList({ selectedProviderId, filterModeHint, onSel
       if (filterMode === 'disabled' && provider.isEnabled) {
         return false
       }
-      const keywords = searchText.toLowerCase().split(/\s+/).filter(Boolean)
       return matchKeywordsInProvider(keywords, provider, providerModelsIndex?.get(provider.id))
     })
-  }, [filterMode, isOvmsSupported, providers, providerModelsIndex, searchText])
+  }, [appEdition, filterMode, isOvmsSupported, providers, providerModelsIndex, searchText])
 
   const providerCounts = useMemo(
     () =>
@@ -143,9 +164,12 @@ export default function ProviderList({ selectedProviderId, filterModeHint, onSel
   const presetSources = useMemo(
     () =>
       providers.filter(
-        (provider) => isProviderPresetInstanceSource(provider) && isProviderSettingsListVisibleProvider(provider)
+        (provider) =>
+          isProviderPresetInstanceSource(provider) &&
+          isProviderSettingsListVisibleProvider(provider) &&
+          isProviderAvailableInEdition(provider, appEdition)
       ),
-    [providers]
+    [appEdition, providers]
   )
 
   const setProviderItemRef = useCallback((providerId: string, element: HTMLDivElement | null) => {

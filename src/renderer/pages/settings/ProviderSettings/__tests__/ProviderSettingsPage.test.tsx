@@ -9,7 +9,14 @@ import ProviderSettingsPage from '../ProviderSettingsPage'
 
 const navigateMock = vi.fn()
 const useProvidersMock = vi.fn()
+const { appEditionMocks } = vi.hoisted(() => ({
+  appEditionMocks: { edition: 'global' as 'global' | 'cn' }
+}))
 let searchMock: Record<string, string | undefined> = {}
+
+vi.mock('@renderer/hooks/useAppEdition', () => ({
+  useAppEdition: () => appEditionMocks.edition
+}))
 
 vi.mock('@renderer/hooks/useProvider', () => ({
   useProviders: (...args: unknown[]) => useProvidersMock(...args)
@@ -25,7 +32,7 @@ vi.mock('../hooks/useProviderDeepLinkImport', () => ({
 }))
 
 vi.mock('../ProviderList', () => ({
-  ProviderList: ({ selectedProviderId, onSelectProvider }: any) => (
+  ProviderList: ({ selectedProviderId, onSelectProvider, onCustomProviderCreated }: any) => (
     <div>
       <div data-testid="selected-provider-id">{selectedProviderId ?? ''}</div>
       <button type="button" onClick={() => onSelectProvider('openai')}>
@@ -34,12 +41,36 @@ vi.mock('../ProviderList', () => ({
       <button type="button" onClick={() => onSelectProvider('anthropic')}>
         select-anthropic
       </button>
+      <button type="button" onClick={() => onSelectProvider('custom-with-key')}>
+        select-custom-with-key
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          onSelectProvider('custom-with-key')
+          onCustomProviderCreated('custom-with-key', true)
+        }}>
+        create-custom-with-key
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          onSelectProvider('custom-without-key')
+          onCustomProviderCreated('custom-without-key', false)
+        }}>
+        create-custom-without-key
+      </button>
     </div>
   )
 }))
 
 vi.mock('../ProviderSetting', () => ({
-  default: ({ providerId }: any) => <div>{`provider-setting-${providerId}`}</div>
+  default: ({ providerId, initialApiSetupStep }: any) => (
+    <div>
+      <span>{`provider-setting-${providerId}`}</span>
+      {initialApiSetupStep ? <span>{`api-setup-${initialApiSetupStep}`}</span> : null}
+    </div>
+  )
 }))
 
 describe('ProviderSettingsPage', () => {
@@ -59,6 +90,7 @@ describe('ProviderSettingsPage', () => {
       error: undefined,
       refetch: vi.fn().mockResolvedValue(undefined)
     })
+    appEditionMocks.edition = 'global'
   })
 
   it('shows loading state without mounting the provider list', () => {
@@ -181,6 +213,27 @@ describe('ProviderSettingsPage', () => {
     expect(screen.queryByText('provider-setting-cherryai')).not.toBeInTheDocument()
   })
 
+  it('falls back from a provider hidden in the current application edition', async () => {
+    appEditionMocks.edition = 'cn'
+    MockUseCacheUtils.setPersistCacheValue('settings.provider.last_selected_provider_id', 'openai')
+    useProvidersMock.mockReturnValue({
+      providers: [
+        { id: 'openai', name: 'OpenAI', isEnabled: true, supportedEditions: ['global'] },
+        { id: 'zhipu', name: 'ZhiPu', isEnabled: true, supportedEditions: ['global', 'cn'] },
+        { id: 'custom-provider', name: 'Custom Provider', isEnabled: true }
+      ],
+      hasLoaded: true,
+      isLoading: false,
+      error: undefined,
+      refetch: vi.fn().mockResolvedValue(undefined)
+    })
+
+    render(<ProviderSettingsPage />)
+
+    expect(await screen.findByText('provider-setting-zhipu')).toBeInTheDocument()
+    expect(screen.queryByText('provider-setting-openai')).not.toBeInTheDocument()
+  })
+
   it('passes a stable provider selector to deep-link import across rerenders', () => {
     const { rerender } = render(<ProviderSettingsPage />)
     const firstSelector = vi.mocked(useProviderDeepLinkImport).mock.calls.at(-1)?.[1]
@@ -188,5 +241,37 @@ describe('ProviderSettingsPage', () => {
     rerender(<ProviderSettingsPage />)
 
     expect(vi.mocked(useProviderDeepLinkImport).mock.calls.at(-1)?.[1]).toBe(firstSelector)
+  })
+
+  it.each([
+    { button: 'create-custom-with-key', providerId: 'custom-with-key', expectedStep: 'models' },
+    { button: 'create-custom-without-key', providerId: 'custom-without-key', expectedStep: 'api-key' }
+  ])('opens $expectedStep setup after creating $providerId', async ({ button, providerId, expectedStep }) => {
+    const user = userEvent.setup()
+    useProvidersMock.mockReturnValue({
+      providers: [...providers, { id: providerId, name: providerId, isEnabled: false }]
+    })
+
+    render(<ProviderSettingsPage />)
+    await user.click(screen.getByRole('button', { name: button }))
+
+    expect(await screen.findByText(`provider-setting-${providerId}`)).toBeInTheDocument()
+    expect(screen.getByText(`api-setup-${expectedStep}`)).toBeInTheDocument()
+  })
+
+  it('does not reopen a stale setup request after selecting another provider', async () => {
+    const user = userEvent.setup()
+    useProvidersMock.mockReturnValue({
+      providers: [...providers, { id: 'custom-with-key', name: 'Custom', isEnabled: false }]
+    })
+
+    render(<ProviderSettingsPage />)
+    await user.click(screen.getByRole('button', { name: 'create-custom-with-key' }))
+    expect(screen.getByText('api-setup-models')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'select-openai' }))
+    await user.click(screen.getByRole('button', { name: 'select-custom-with-key' }))
+
+    expect(screen.queryByText('api-setup-models')).not.toBeInTheDocument()
   })
 })
