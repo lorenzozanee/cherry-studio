@@ -1035,7 +1035,7 @@ function ContextManagementFields({
             allowClear
             emptyLabel={t('library.config.basic.context_compress_model_follow')}
             // A compression model summarizes history — only chat-capable models qualify.
-            filter={(model, provider) => isModelVisibleOutsideAgent(model, provider) && !isNonChatModel(model)}
+            filter={(model) => isModelVisibleOutsideAgent(model) && !isNonChatModel(model)}
             portalContainer={portalContainer}
             modelLabels={modelLabels}
             setModelLabels={setModelLabels}

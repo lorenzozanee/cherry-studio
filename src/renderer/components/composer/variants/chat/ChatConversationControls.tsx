@@ -22,8 +22,7 @@ import {
   COMPOSER_SELECTOR_BUTTON_CLASS
 } from '../shared/ComposerControlScaffolding'
 
-const CHAT_MODEL_FILTER: ModelSelectorFilter = (model, provider) =>
-  isModelVisibleOutsideAgent(model, provider) && !isNonChatModel(model)
+const CHAT_MODEL_FILTER: ModelSelectorFilter = (model) => isModelVisibleOutsideAgent(model) && !isNonChatModel(model)
 
 export interface ChatConversationControlsProps {
   assistantId: string | null
